@@ -12,6 +12,7 @@
 - 定期统计报告（每分钟）
 - 支持自定义交易对和K线间隔
 - 监控PING/PONG心跳消息
+- 支持HTTP、SOCKS4和SOCKS5代理
 
 ## 安装依赖
 
@@ -39,6 +40,12 @@ python binance_ws_test.py --proxy
 
 这将使用默认的代理设置（192.168.8.66:6152）。
 
+### 使用SOCKS5代理
+
+```bash
+python binance_ws_test.py --proxy --proxy-host 192.168.30.66 --proxy-port 6152 --proxy-type socks5
+```
+
 ### 自定义交易对
 
 ```bash
@@ -58,6 +65,7 @@ python binance_ws_test.py --proxy --proxy-host 127.0.0.1 --proxy-port 7890 --sym
   --proxy                使用HTTP代理
   --proxy-host PROXY_HOST  HTTP代理主机 (默认: 192.168.8.66)
   --proxy-port PROXY_PORT  HTTP代理端口 (默认: 6152)
+  --proxy-type {http,socks4,socks5}  代理类型 (默认: http)
   --symbols SYMBOLS      交易对，用逗号分隔 (默认: btcusdt,ethusdt,bnbusdt)
   --interval INTERVAL    K线间隔 (默认: 1m)
   --log-level {DEBUG,INFO,WARNING,ERROR}

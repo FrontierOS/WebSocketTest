@@ -18,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class BinanceWSClient:
-    def __init__(self, use_proxy=False, proxy_host="192.168.8.66", proxy_port=6152, symbols=None, interval="1m"):
+    def __init__(self, use_proxy=False, proxy_host="192.168.8.66", proxy_port=6152, proxy_type="http", symbols=None, interval="1m"):
         """
         初始化币安WebSocket客户端
         
@@ -26,6 +26,7 @@ class BinanceWSClient:
             use_proxy: 是否使用代理
             proxy_host: 代理主机地址
             proxy_port: 代理端口
+            proxy_type: 代理类型 (http, socks4, socks5)
             symbols: 交易对列表
             interval: K线间隔
         """
@@ -34,6 +35,7 @@ class BinanceWSClient:
         self.use_proxy = use_proxy
         self.proxy_host = proxy_host
         self.proxy_port = proxy_port
+        self.proxy_type = proxy_type
         self.ws = None
         self.connected = False
         self.last_msg_time = None
@@ -75,12 +77,12 @@ class BinanceWSClient:
             "on_pong": self.on_pong,
         }
         
-        # 如果使用代理，添加代理配置
+        # 设置代理（如果需要）
         if self.use_proxy:
-            http_proxy_url = f"http://{self.proxy_host}:{self.proxy_port}"
-            ws_options["http_proxy_host"] = self.proxy_host
-            ws_options["http_proxy_port"] = self.proxy_port
-            logger.info(f"使用HTTP代理: {http_proxy_url}")
+            proxy_url = f"{self.proxy_type}://{self.proxy_host}:{self.proxy_port}"
+            logger.info(f"使用{self.proxy_type.upper()}代理: {proxy_url}")
+            # 禁用跟踪，避免过多日志
+            websocket.enableTrace(False)
         
         # 创建WebSocket连接
         self.ws = websocket.WebSocketApp(ws_url, **ws_options)
@@ -101,7 +103,31 @@ class BinanceWSClient:
         # 启动WebSocket
         logger.info(f"正在连接到币安WebSocket: {ws_url}")
         logger.info(f"订阅的交易对: {', '.join(self.symbols)}")
-        self.ws.run_forever(ping_interval=20, ping_timeout=10)
+        
+        # 运行WebSocket客户端
+        if self.use_proxy:
+            # 在run_forever中设置代理
+            run_forever_kwargs = {
+                "ping_interval": 20,
+                "ping_timeout": 10,
+                "proxy_type": self.proxy_type
+            }
+            
+            # 根据代理类型设置不同的参数
+            if self.proxy_type == "http":
+                run_forever_kwargs["http_proxy_host"] = self.proxy_host
+                run_forever_kwargs["http_proxy_port"] = self.proxy_port
+            elif self.proxy_type.startswith("socks"):
+                run_forever_kwargs["socks_host"] = self.proxy_host
+                run_forever_kwargs["socks_port"] = self.proxy_port
+                if self.proxy_type == "socks5":
+                    run_forever_kwargs["socks_version"] = 5
+                    run_forever_kwargs["socks_username"] = None
+                    run_forever_kwargs["socks_password"] = None
+            
+            self.ws.run_forever(**run_forever_kwargs)
+        else:
+            self.ws.run_forever(ping_interval=20, ping_timeout=10)
     
     def on_open(self, ws):
         """WebSocket连接打开时的回调"""
@@ -252,8 +278,10 @@ def main():
     """主函数"""
     parser = argparse.ArgumentParser(description='币安WebSocket连接稳定性测试工具')
     parser.add_argument('--proxy', action='store_true', help='使用HTTP代理')
-    parser.add_argument('--proxy-host', default='192.168.8.66', help='HTTP代理主机 (默认: 192.168.8.66)')
-    parser.add_argument('--proxy-port', type=int, default=6152, help='HTTP代理端口 (默认: 6152)')
+    parser.add_argument('--proxy-host', default='192.168.8.66', help='代理主机地址 (默认: 192.168.8.66)')
+    parser.add_argument('--proxy-port', type=int, default=6152, help='代理端口 (默认: 6152)')
+    parser.add_argument('--proxy-type', default='http', choices=['http', 'socks4', 'socks5'], 
+                        help='代理类型 (默认: http)')
     parser.add_argument('--symbols', default='btcusdt,ethusdt,bnbusdt', help='交易对，用逗号分隔 (默认: btcusdt,ethusdt,bnbusdt)')
     parser.add_argument('--interval', default='1m', help='K线间隔 (默认: 1m)')
     parser.add_argument('--log-level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
@@ -273,6 +301,7 @@ def main():
             use_proxy=args.proxy,
             proxy_host=args.proxy_host,
             proxy_port=args.proxy_port,
+            proxy_type=args.proxy_type,
             symbols=symbols,
             interval=args.interval
         )
